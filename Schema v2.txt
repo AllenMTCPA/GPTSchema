@@ -1,0 +1,786 @@
+{
+  "schema_name": "form_990_thin_financials",
+  "version": "1.0",
+  "purpose": "Normalized dataset for extracting key Form 990 data from: page 1 (header + summary), pages 7–8 (officers & directors), page 9 (revenue: program + investment), page 10 (expenses), page 11 (balance sheet).",
+  "ingestion_guidelines": [
+    "Each PDF corresponds to exactly one row in fact_filing_990_core.",
+    "Use EIN + legal_name to match or create dim_organization rows before inserting facts.",
+    "All monetary values should be parsed as numbers (decimal allowed). Leave missing values as null.",
+    "Dates must be ISO-8601 strings (YYYY-MM-DD).",
+    "If a field is not present on a particular form, omit it or set it to null; do NOT invent values."
+  ],
+  "tables": {
+    "dim_organization": {
+      "description": "One row per legal entity (organization) filing Form 990.",
+      "primary_key": ["org_id"],
+      "natural_key": ["ein"],
+      "fields": [
+        {
+          "name": "org_id",
+          "type": "integer",
+          "required": true,
+          "description": "Surrogate internal identifier for the organization."
+        },
+        {
+          "name": "ein",
+          "type": "string",
+          "required": true,
+          "description": "Employer Identification Number exactly as shown on Form 990."
+        },
+        {
+          "name": "legal_name",
+          "type": "string",
+          "required": true,
+          "description": "Full legal name of the organization from the Form 990 header."
+        },
+        {
+          "name": "doing_business_as",
+          "type": "string",
+          "required": false,
+          "description": "DBA or alternate name if reported on the form."
+        },
+        {
+          "name": "state_legal_domicile",
+          "type": "string",
+          "required": false,
+          "description": "Two-letter state code for legal domicile (e.g., FL, GA, HI, MT)."
+        },
+        {
+          "name": "org_type_code",
+          "type": "string",
+          "required": false,
+          "description": "IRS tax-exempt status code, e.g., '501(c)(6)' or '501(c)(3)'."
+        },
+        {
+          "name": "website_url",
+          "type": "string",
+          "required": false,
+          "description": "Organization website URL if provided on the form."
+        },
+        {
+          "name": "year_of_formation",
+          "type": "integer",
+          "required": false,
+          "description": "Year of formation if provided, e.g., 1934."
+        }
+      ]
+    },
+    "fact_filing_990_core": {
+      "description": "One row per Form 990 filing (per organization per tax year). Contains page 1 header, status, and key summary figures.",
+      "primary_key": ["filing_id"],
+      "foreign_keys": [
+        {
+          "field": "org_id",
+          "references": "dim_organization.org_id"
+        }
+      ],
+      "fields": [
+        {
+          "name": "filing_id",
+          "type": "integer",
+          "required": true,
+          "description": "Surrogate internal identifier for this specific Form 990 filing."
+        },
+        {
+          "name": "org_id",
+          "type": "integer",
+          "required": true,
+          "description": "Foreign key to dim_organization.org_id."
+        },
+        {
+          "name": "ein",
+          "type": "string",
+          "required": true,
+          "description": "EIN copied from dim_organization for convenience and validation."
+        },
+        {
+          "name": "tax_year",
+          "type": "integer",
+          "required": true,
+          "description": "Tax year of the filing (e.g., 2022). Use the year indicated on the form for the tax period."
+        },
+        {
+          "name": "tax_period_begin_date",
+          "type": "string",
+          "format": "date",
+          "required": true,
+          "description": "Start date of the tax period (YYYY-MM-DD)."
+        },
+        {
+          "name": "tax_period_end_date",
+          "type": "string",
+          "format": "date",
+          "required": true,
+          "description": "End date of the tax period (YYYY-MM-DD)."
+        },
+        {
+          "name": "form_version_year",
+          "type": "integer",
+          "required": false,
+          "description": "Year in the Form 990 version label printed at the top (e.g., 2023)."
+        },
+        {
+          "name": "gross_receipts",
+          "type": "number",
+          "required": false,
+          "description": "Gross receipts amount from the header."
+        },
+        {
+          "name": "tax_exempt_status",
+          "type": "string",
+          "required": false,
+          "description": "Textual tax-exempt status from the header, e.g., '501(c)(6)'."
+        },
+        {
+          "name": "form_of_organization",
+          "type": "string",
+          "required": false,
+          "allowed_values": ["Corporation", "Trust", "Association", "Other", null],
+          "description": "Form of organization as indicated on the header."
+        },
+        {
+          "name": "final_return_flag",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the 'Final return/terminated' box is checked."
+        },
+        {
+          "name": "amended_return_flag",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the 'Amended return' box is checked."
+        },
+        {
+          "name": "application_pending_flag",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the 'Application pending' box is checked."
+        },
+        {
+          "name": "total_revenue_current",
+          "type": "number",
+          "required": false,
+          "description": "Total revenue for the current year as shown in Part I, Summary."
+        },
+        {
+          "name": "total_revenue_prior",
+          "type": "number",
+          "required": false,
+          "description": "Total revenue for the prior year as shown in Part I, Summary."
+        },
+        {
+          "name": "total_expenses_current",
+          "type": "number",
+          "required": false,
+          "description": "Total expenses for the current year as shown in Part I, Summary."
+        },
+        {
+          "name": "total_expenses_prior",
+          "type": "number",
+          "required": false,
+          "description": "Total expenses for the prior year as shown in Part I, Summary."
+        },
+        {
+          "name": "revenue_less_expenses_current",
+          "type": "number",
+          "required": false,
+          "description": "Revenue less expenses for the current year (Part I)."
+        },
+        {
+          "name": "revenue_less_expenses_prior",
+          "type": "number",
+          "required": false,
+          "description": "Revenue less expenses for the prior year (Part I)."
+        },
+        {
+          "name": "net_assets_begin",
+          "type": "number",
+          "required": false,
+          "description": "Net assets or fund balances at beginning of year (Part I)."
+        },
+        {
+          "name": "net_assets_end",
+          "type": "number",
+          "required": false,
+          "description": "Net assets or fund balances at end of year (Part I)."
+        },
+        {
+          "name": "voting_gov_body_count",
+          "type": "integer",
+          "required": false,
+          "description": "Number of voting members of the governing body (Part I, line 5 or equivalent)."
+        },
+        {
+          "name": "independent_voting_members_count",
+          "type": "integer",
+          "required": false,
+          "description": "Number of independent voting members of the governing body."
+        },
+        {
+          "name": "employees_count",
+          "type": "integer",
+          "required": false,
+          "description": "Number of employees reported on page 1 (total employees)."
+        },
+        {
+          "name": "volunteers_count",
+          "type": "integer",
+          "required": false,
+          "description": "Number of volunteers reported on page 1."
+        },
+        {
+          "name": "source_file_name",
+          "type": "string",
+          "required": false,
+          "description": "File name of the original PDF or data source, for traceability."
+        }
+      ]
+    },
+    "fact_officers_directors": {
+      "description": "Officers, directors, trustees, key employees, and highest compensated employees from pages 7–8 (Part VII, Section A).",
+      "primary_key": ["officer_row_id"],
+      "foreign_keys": [
+        {
+          "field": "filing_id",
+          "references": "fact_filing_990_core.filing_id"
+        }
+      ],
+      "fields": [
+        {
+          "name": "officer_row_id",
+          "type": "integer",
+          "required": true,
+          "description": "Surrogate internal identifier for this row (one person per filing)."
+        },
+        {
+          "name": "filing_id",
+          "type": "integer",
+          "required": true,
+          "description": "Foreign key to fact_filing_990_core.filing_id."
+        },
+        {
+          "name": "person_name",
+          "type": "string",
+          "required": true,
+          "description": "Full name of the person as shown on Part VII."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "Title or role description (e.g., 'President', 'CEO', 'Director')."
+        },
+        {
+          "name": "average_hours_per_week",
+          "type": "number",
+          "required": false,
+          "description": "Average hours per week devoted to the position for the filing organization."
+        },
+        {
+          "name": "average_hours_per_week_related",
+          "type": "number",
+          "required": false,
+          "description": "Average hours per week devoted to related organizations, if reported."
+        },
+        {
+          "name": "is_officer",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is classified as an officer on the form."
+        },
+        {
+          "name": "is_director",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is classified as a director."
+        },
+        {
+          "name": "is_trustee",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is classified as a trustee."
+        },
+        {
+          "name": "is_key_employee",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is classified as a key employee."
+        },
+        {
+          "name": "is_highest_compensated_employee",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is listed as one of the highest compensated employees."
+        },
+        {
+          "name": "is_former",
+          "type": "boolean",
+          "required": false,
+          "description": "True if the person is indicated as a former officer/director/employee."
+        },
+        {
+          "name": "comp_from_org",
+          "type": "number",
+          "required": false,
+          "description": "Reportable compensation from the filing organization."
+        },
+        {
+          "name": "comp_from_related_orgs",
+          "type": "number",
+          "required": false,
+          "description": "Reportable compensation from related organizations."
+        },
+        {
+          "name": "other_compensation",
+          "type": "number",
+          "required": false,
+          "description": "Other compensation from the organization and related organizations."
+        }
+      ]
+    },
+    "fact_revenue_summary": {
+      "description": "Page 9 Statement of Revenue: program-related, membership, and investment income.",
+      "primary_key": ["filing_id"],
+      "foreign_keys": [
+        {
+          "field": "filing_id",
+          "references": "fact_filing_990_core.filing_id"
+        }
+      ],
+      "fields": [
+        {
+          "name": "filing_id",
+          "type": "integer",
+          "required": true,
+          "description": "Foreign key to fact_filing_990_core.filing_id. One row per filing."
+        },
+        {
+          "name": "contributions_and_grants_total",
+          "type": "number",
+          "required": false,
+          "description": "Total contributions and grants reported in the revenue section."
+        },
+        {
+          "name": "program_service_revenue_total",
+          "type": "number",
+          "required": false,
+          "description": "Total program service revenue (e.g., CPE, seminars, conferences)."
+        },
+        {
+          "name": "membership_dues_or_assessments",
+          "type": "number",
+          "required": false,
+          "description": "Membership dues and assessments, if separately reported."
+        },
+        {
+          "name": "other_program_revenue",
+          "type": "number",
+          "required": false,
+          "description": "Other revenue related to program activities not captured above."
+        },
+        {
+          "name": "investment_income_interest",
+          "type": "number",
+          "required": false,
+          "description": "Investment income from interest."
+        },
+        {
+          "name": "investment_income_dividends",
+          "type": "number",
+          "required": false,
+          "description": "Investment income from dividends."
+        },
+        {
+          "name": "investment_income_rents",
+          "type": "number",
+          "required": false,
+          "description": "Investment income from rents, if reported as investment income."
+        },
+        {
+          "name": "investment_income_royalties",
+          "type": "number",
+          "required": false,
+          "description": "Investment income from royalties."
+        },
+        {
+          "name": "investment_income_other",
+          "type": "number",
+          "required": false,
+          "description": "Other investment-related income not covered by interest/dividends/rents/royalties."
+        },
+        {
+          "name": "investment_income_total",
+          "type": "number",
+          "required": false,
+          "description": "Total investment income as reported in the Statement of Revenue."
+        },
+        {
+          "name": "other_revenue_total",
+          "type": "number",
+          "required": false,
+          "description": "All other revenue categories combined that are not contributions, program service, or investment income."
+        },
+        {
+          "name": "total_revenue_statement",
+          "type": "number",
+          "required": false,
+          "description": "Total revenue per the Statement of Revenue (should match or reconcile with total_revenue_current in fact_filing_990_core)."
+        }
+      ]
+    },
+    "fact_expense_summary": {
+      "description": "Page 10 Statement of Functional Expenses: core natural categories and functional totals (program, management & general, fundraising).",
+      "primary_key": ["filing_id"],
+      "foreign_keys": [
+        {
+          "field": "filing_id",
+          "references": "fact_filing_990_core.filing_id"
+        }
+      ],
+      "fields": [
+        {
+          "name": "filing_id",
+          "type": "integer",
+          "required": true,
+          "description": "Foreign key to fact_filing_990_core.filing_id. One row per filing."
+        },
+        {
+          "name": "salaries_wages_total",
+          "type": "number",
+          "required": false,
+          "description": "Total salaries and wages across all functional categories."
+        },
+        {
+          "name": "other_employee_benefits_total",
+          "type": "number",
+          "required": false,
+          "description": "Total other employee benefits (e.g., health insurance, retirement)."
+        },
+        {
+          "name": "payroll_taxes_total",
+          "type": "number",
+          "required": false,
+          "description": "Total payroll taxes."
+        },
+        {
+          "name": "professional_fees_total",
+          "type": "number",
+          "required": false,
+          "description": "Total professional fees and other independent contractor payments."
+        },
+        {
+          "name": "occupancy_total",
+          "type": "number",
+          "required": false,
+          "description": "Total occupancy costs (rent, utilities, etc.)."
+        },
+        {
+          "name": "office_expenses_total",
+          "type": "number",
+          "required": false,
+          "description": "Total office expenses."
+        },
+        {
+          "name": "travel_and_meetings_total",
+          "type": "number",
+          "required": false,
+          "description": "Total travel, conferences, conventions, and meetings."
+        },
+        {
+          "name": "information_technology_total",
+          "type": "number",
+          "required": false,
+          "description": "Total information technology expenses."
+        },
+        {
+          "name": "grants_and_assistance_total",
+          "type": "number",
+          "required": false,
+          "description": "Total grants and other assistance paid to organizations and individuals."
+        },
+        {
+          "name": "depreciation_amortization_total",
+          "type": "number",
+          "required": false,
+          "description": "Total depreciation, depletion, and amortization expenses."
+        },
+        {
+          "name": "other_expenses_total",
+          "type": "number",
+          "required": false,
+          "description": "All other expenses combined that do not fall into the specific categories above."
+        },
+        {
+          "name": "total_expenses_program_services",
+          "type": "number",
+          "required": false,
+          "description": "Total expenses allocated to program services (from the final column in Part IX)."
+        },
+        {
+          "name": "total_expenses_management_general",
+          "type": "number",
+          "required": false,
+          "description": "Total expenses allocated to management and general."
+        },
+        {
+          "name": "total_expenses_fundraising",
+          "type": "number",
+          "required": false,
+          "description": "Total expenses allocated to fundraising."
+        },
+        {
+          "name": "total_expenses_overall",
+          "type": "number",
+          "required": false,
+          "description": "Total functional expenses across all columns; should match total_expenses_current in fact_filing_990_core."
+        }
+      ]
+    },
+    "fact_balance_sheet": {
+      "description": "Page 11 Balance Sheet (Part X): selected asset, liability, and net asset lines with beginning-of-year and end-of-year amounts.",
+      "primary_key": ["filing_id"],
+      "foreign_keys": [
+        {
+          "field": "filing_id",
+          "references": "fact_filing_990_core.filing_id"
+        }
+      ],
+      "fields": [
+        {
+          "name": "filing_id",
+          "type": "integer",
+          "required": true,
+          "description": "Foreign key to fact_filing_990_core.filing_id. One row per filing."
+        },
+        {
+          "name": "cash_non_interest_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year cash (non-interest-bearing)."
+        },
+        {
+          "name": "cash_non_interest_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year cash (non-interest-bearing)."
+        },
+        {
+          "name": "savings_and_temp_cash_inv_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year savings and temporary cash investments."
+        },
+        {
+          "name": "savings_and_temp_cash_inv_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year savings and temporary cash investments."
+        },
+        {
+          "name": "pledges_and_grants_receivable_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year pledges and grants receivable."
+        },
+        {
+          "name": "pledges_and_grants_receivable_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year pledges and grants receivable."
+        },
+        {
+          "name": "accounts_receivable_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year accounts receivable (net)."
+        },
+        {
+          "name": "accounts_receivable_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year accounts receivable (net)."
+        },
+        {
+          "name": "inventories_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year inventories."
+        },
+        {
+          "name": "inventories_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year inventories."
+        },
+        {
+          "name": "prepaid_expenses_and_deferred_charges_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year prepaid expenses and deferred charges."
+        },
+        {
+          "name": "prepaid_expenses_and_deferred_charges_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year prepaid expenses and deferred charges."
+        },
+        {
+          "name": "investments_publicly_traded_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year publicly traded securities."
+        },
+        {
+          "name": "investments_publicly_traded_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year publicly traded securities."
+        },
+        {
+          "name": "other_investments_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year other investments."
+        },
+        {
+          "name": "other_investments_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year other investments."
+        },
+        {
+          "name": "fixed_assets_net_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year fixed assets, net of accumulated depreciation."
+        },
+        {
+          "name": "fixed_assets_net_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year fixed assets, net of accumulated depreciation."
+        },
+        {
+          "name": "other_assets_total_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year other assets total."
+        },
+        {
+          "name": "other_assets_total_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year other assets total."
+        },
+        {
+          "name": "total_assets_beg",
+          "type": "number",
+          "required": false,
+          "description": "Total assets at beginning of year."
+        },
+        {
+          "name": "total_assets_end",
+          "type": "number",
+          "required": false,
+          "description": "Total assets at end of year."
+        },
+        {
+          "name": "accounts_payable_and_accrued_expenses_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year accounts payable and accrued expenses."
+        },
+        {
+          "name": "accounts_payable_and_accrued_expenses_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year accounts payable and accrued expenses."
+        },
+        {
+          "name": "deferred_revenue_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year deferred revenue."
+        },
+        {
+          "name": "deferred_revenue_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year deferred revenue."
+        },
+        {
+          "name": "tax_exempt_bonds_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year tax-exempt bond liabilities (if any)."
+        },
+        {
+          "name": "tax_exempt_bonds_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year tax-exempt bond liabilities (if any)."
+        },
+        {
+          "name": "other_liabilities_total_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year total other liabilities."
+        },
+        {
+          "name": "other_liabilities_total_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year total other liabilities."
+        },
+        {
+          "name": "total_liabilities_beg",
+          "type": "number",
+          "required": false,
+          "description": "Total liabilities at beginning of year."
+        },
+        {
+          "name": "total_liabilities_end",
+          "type": "number",
+          "required": false,
+          "description": "Total liabilities at end of year."
+        },
+        {
+          "name": "net_assets_without_donor_restrictions_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year net assets without donor restrictions (or unrestricted net assets for older forms)."
+        },
+        {
+          "name": "net_assets_without_donor_restrictions_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year net assets without donor restrictions."
+        },
+        {
+          "name": "net_assets_with_donor_restrictions_beg",
+          "type": "number",
+          "required": false,
+          "description": "Beginning-of-year net assets with donor restrictions (often zero for 501(c)(6) organizations)."
+        },
+        {
+          "name": "net_assets_with_donor_restrictions_end",
+          "type": "number",
+          "required": false,
+          "description": "End-of-year net assets with donor restrictions."
+        },
+        {
+          "name": "total_net_assets_beg",
+          "type": "number",
+          "required": false,
+          "description": "Total net assets at beginning of year (should match net_assets_begin in fact_filing_990_core)."
+        },
+        {
+          "name": "total_net_assets_end",
+          "type": "number",
+          "required": false,
+          "description": "Total net assets at end of year (should match net_assets_end in fact_filing_990_core)."
+        }
+      ]
+    }
+  }
+}
